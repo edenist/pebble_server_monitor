@@ -1,0 +1,17 @@
+{
+  "uuid": "4600fb75-81a2-476a-ba1a-ca5339c1cf4f",
+  "shortName": "pebble_server_monitor",
+  "longName": "pebble_server_monitor",
+  "companyName": "MakeAwesomeHappen",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": []
+  }
+}
