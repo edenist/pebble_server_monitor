@@ -2,6 +2,7 @@
   "uuid": "4600fb75-81a2-476a-ba1a-ca5339c1cf4f",
   "shortName": "Server Monitor",
   "longName": "Pebble Server Monitor",
+  "capabilities": [ "configurable" ],
   "companyName": "RobotProfessor",
   "versionCode": 1,
   "versionLabel": "0.0.1",
@@ -9,7 +10,11 @@
     "watchface": false
   },
   "appKeys": {
-    "dummy": 0
+    "fetch": 0,
+    "ip": 1,
+    "cpu": 2,
+    "mem": 3,
+    "host": 4
   },
   "resources": {
     "media": []
