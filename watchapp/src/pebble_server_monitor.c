@@ -10,6 +10,10 @@
 #define DEFAULT_HOST "DEFAULT_HOST"
 
 #define DEFAULT_BAR_VAL 40
+#define DEFAULT_UPDATE_DELAY  1000    //milliseconds
+#define DEFAULT_UPDATE_TIMEOUT  30000    //GET request timeout - 30 seconds
+#define DEFAULT_UPDATE_OFFSET 500 
+#define BOOT_COMMS_DELAY  3000
 
 typedef Layer ProgressBarLayer;
 
@@ -21,10 +25,19 @@ static TextLayer *ip_text;
 static TextLayer *debug_text;
 static ProgressBarLayer *progress_bar_cpu;
 static ProgressBarLayer *progress_bar_mem;
+static AppTimer *refresh_timer;               //main data refresh timer
+static AppTimer *variable_offset_timer;       //used to delay update of multiple variables
 static char host[16];
 static char cpu[10];
 static char mem[10];
 static char ip[16];
+
+static char logBuff[24];
+
+static int auto_update = 0;
+static int update_interval = 1000;
+static int auto_update_prev = 0;
+
 
 enum {
   SERVER_KEY_FETCH = 0x0,
@@ -32,15 +45,25 @@ enum {
   SERVER_KEY_CPU = 0x2,
   SERVER_KEY_MEM = 0x3,
   SERVER_KEY_HOST = 0x4,
+  SERVER_KEY_AUTO = 0x5,
+  SERVER_KEY_UPDATE_INT = 0x6,
 };
 
 typedef struct {
   unsigned int progress; // how full the bar is
 } ProgressData;
 
-static void set_ip_msg(char *ip) {
-  Tuplet ip_tuple = TupletCString(SERVER_KEY_IP, ip);
+//function prototypes [as required]
+static void get_all(void *data);
 
+
+static void fetch_msg(unsigned int server_key) {
+  Tuplet server_tuple = TupletInteger(server_key, 1);
+  
+  char logtemp[15];
+  snprintf(logtemp, 15, "FETCH_MSG... %d", server_key);
+
+  APP_LOG(APP_LOG_LEVEL_DEBUG, logtemp);
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
 
@@ -48,46 +71,49 @@ static void set_ip_msg(char *ip) {
     return;
   }
 
-  dict_write_tuplet(iter, &ip_tuple);
+  dict_write_tuplet(iter, &server_tuple);
   dict_write_end(iter);
-  
+
   app_message_outbox_send();
 }
 
-static void fetch_msg(void) {
-  Tuplet fetch_tuple = TupletInteger(SERVER_KEY_FETCH, 1);
-  Tuplet cpu_tuple = TupletInteger(SERVER_KEY_CPU, 1);
-  Tuplet mem_tuple = TupletInteger(SERVER_KEY_MEM, 1);
-  Tuplet host_tuple = TupletInteger(SERVER_KEY_HOST, 1);
+static void get_cpu(void) {
+  fetch_msg(SERVER_KEY_CPU);
+  text_layer_set_text(debug_text, "CPU");
+}
 
-  DictionaryIterator *iter;
-  app_message_outbox_begin(&iter);
+static void get_mem(void) {
+  fetch_msg(SERVER_KEY_MEM);
+  text_layer_set_text(debug_text, "MEM");
+} 
 
-  if (iter == NULL) {
-    return;
+static void get_mem_timer(void *data) {
+  fetch_msg(SERVER_KEY_MEM);
+  text_layer_set_text(debug_text, "MEM");
+  if (auto_update == 1) {
+    refresh_timer = app_timer_register(update_interval, get_all, NULL);  //timeout added, update_refresh reset to DEFUALT_UPDATE_DELAY after reply received - will default to TIMEOUT if no reply received. Prevents new GET requests while waiting for previous ones.
   }
+} 
 
-  dict_write_tuplet(iter, &fetch_tuple);
-  dict_write_tuplet(iter, &cpu_tuple);
-  dict_write_tuplet(iter, &mem_tuple);
-  dict_write_tuplet(iter, &host_tuple);
-  dict_write_end(iter);
-
-  app_message_outbox_send();
+static void get_all(void *data) {
+  fetch_msg(SERVER_KEY_CPU);
+  variable_offset_timer = app_timer_register(DEFAULT_UPDATE_OFFSET, get_mem_timer, NULL);
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   //refresh usage
+  get_all(NULL);
   text_layer_set_text(debug_text, "Refreshing...");
-  fetch_msg();
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(debug_text, "Up");
+  fetch_msg(SERVER_KEY_IP);
+  text_layer_set_text(debug_text, "IP");
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(debug_text, "Down");
+  fetch_msg(SERVER_KEY_FETCH);              //fetch settings - ip, hostname, updateinterval etc...
+  text_layer_set_text(debug_text, "Fetch settings");
 }
 
 static void click_config_provider(void *context) {
@@ -106,6 +132,8 @@ static void in_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *cpu_tuple = dict_find(iter, SERVER_KEY_CPU);
   Tuple *mem_tuple = dict_find(iter, SERVER_KEY_MEM);
   Tuple *host_tuple = dict_find(iter, SERVER_KEY_HOST);
+  Tuple *auto_tuple = dict_find(iter, SERVER_KEY_AUTO);
+  Tuple *update_int_tuple = dict_find(iter, SERVER_KEY_UPDATE_INT);
 
   if (ip_tuple) {
     strncpy(ip, ip_tuple->value->cstring, 16);
@@ -116,6 +144,7 @@ static void in_received_handler(DictionaryIterator *iter, void *context) {
     text_layer_set_text(cpu_usage_text, cpu);
     updateBarData(progress_bar_cpu, atoi(cpu));
     layer_mark_dirty(progress_bar_cpu);
+    //app_timer_reschedule(refresh_timer, DEFAULT_UPDATE_DELAY);  //Data received, start refresh timer now
   }
   if (mem_tuple) {
     strncpy(mem, mem_tuple->value->cstring, 10);
@@ -126,6 +155,25 @@ static void in_received_handler(DictionaryIterator *iter, void *context) {
   if (host_tuple) {
     strncpy(host, host_tuple->value->cstring, 16);
     text_layer_set_text(hostname_text, host);
+  }
+  if (auto_tuple) {
+    auto_update_prev = auto_update;   
+    auto_update = atoi(auto_tuple->value->cstring);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "AUTO UPDATE RECEIVED!!!!!!");
+    snprintf(logBuff, 20, "auto_update: %d", auto_update);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, logBuff);
+
+    //check if auto_update has been enabled [IF it was previously disabled]
+    if ((auto_update_prev == 0) && (auto_update == 1)) {
+      refresh_timer = app_timer_register(update_interval, get_all, NULL);
+      APP_LOG(APP_LOG_LEVEL_DEBUG, "AUTO UPDATE enabled!");
+    }
+  }
+  if (update_int_tuple) {
+    update_interval = atoi(update_int_tuple->value->cstring);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "UPDATE_INT RECEIVED!!!!!!");
+    snprintf(logBuff, 20, "update_interval: %d", update_interval);
+    APP_LOG(APP_LOG_LEVEL_DEBUG, logBuff);
   }
 }
 
@@ -144,7 +192,6 @@ static void app_message_init(void) {
   app_message_register_outbox_failed(out_failed_handler);
   // Init buffers
   app_message_open(64, 64);
-  fetch_msg();
 }
 
 static void progress_bar_layer_update(ProgressBarLayer *bar, GContext *ctx) {
@@ -205,7 +252,6 @@ static void window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(debug_text));
   text_layer_set_text(debug_text, "DEBUG");
 
-  fetch_msg();
 }
 
 static void window_unload(Window *window) {
@@ -218,6 +264,10 @@ static void window_unload(Window *window) {
   progress_bar_destroy(progress_bar_mem);
 }
 
+static void init_comms(void *data) {
+  fetch_msg(SERVER_KEY_FETCH);
+}
+
 static void init(void) {
   window = window_create();
   app_message_init();
@@ -228,7 +278,9 @@ static void init(void) {
   });
   const bool animated = true;
   window_stack_push(window, animated);
-  
+
+  //wait after startup before commencing comms - then request config - 3 second wait
+  refresh_timer = app_timer_register(BOOT_COMMS_DELAY, init_comms, NULL);
 }
 
 static void deinit(void) {
