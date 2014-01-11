@@ -16,7 +16,8 @@
     "mem": 3,
     "host": 4,
     "auto": 5,
-    "update_int": 6
+    "update_int": 6,
+    "all": 7
   },
   "resources": {
     "media": []

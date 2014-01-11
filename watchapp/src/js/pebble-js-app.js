@@ -28,6 +28,11 @@ function fetchServerStats(ip, FIELD) {
           mem = response.Data.mem;
           host = response.Data.host;
           switch(FIELD) {
+            case 'all':
+              console.log('ALL');
+              Pebble.sendAppMessage({
+                "mem": mem.toString(), "cpu": cpu.toString(), "host": host.toString()});
+            break;
             case 'host':
               console.log(host);
               Pebble.sendAppMessage({
@@ -160,6 +165,10 @@ Pebble.addEventListener("appmessage",
       if (e.payload.mem) {
         console.log("message - MEM");
         fetchServerStats(ip, 'mem');
+      }
+      if (e.payload.all) {
+        console.log("message - ALL");
+        fetchServerStats(ip, 'all');
       }
     }
 );

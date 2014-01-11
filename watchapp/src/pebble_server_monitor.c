@@ -14,6 +14,8 @@
 #define DEFAULT_UPDATE_TIMEOUT  30000    //GET request timeout - 30 seconds
 #define DEFAULT_UPDATE_OFFSET 500 
 #define BOOT_COMMS_DELAY  3000
+#define PBAR_HEIGHT 18
+#define PBAR_WIDTH 130
 
 typedef Layer ProgressBarLayer;
 
@@ -27,10 +29,10 @@ static ProgressBarLayer *progress_bar_cpu;
 static ProgressBarLayer *progress_bar_mem;
 static AppTimer *refresh_timer;               //main data refresh timer
 static AppTimer *variable_offset_timer;       //used to delay update of multiple variables
-static char host[16];
+static char host[26];
 static char cpu[10];
 static char mem[10];
-static char ip[16];
+static char ip[26];
 
 static char logBuff[24];
 
@@ -47,6 +49,7 @@ enum {
   SERVER_KEY_HOST = 0x4,
   SERVER_KEY_AUTO = 0x5,
   SERVER_KEY_UPDATE_INT = 0x6,
+  SERVER_KEY_ALL = 0x7,
 };
 
 typedef struct {
@@ -87,17 +90,11 @@ static void get_mem(void) {
   text_layer_set_text(debug_text, "MEM");
 } 
 
-static void get_mem_timer(void *data) {
-  fetch_msg(SERVER_KEY_MEM);
-  text_layer_set_text(debug_text, "MEM");
+static void get_all(void *data) {
+  fetch_msg(SERVER_KEY_ALL);
   if (auto_update == 1) {
     refresh_timer = app_timer_register(update_interval, get_all, NULL);  //timeout added, update_refresh reset to DEFUALT_UPDATE_DELAY after reply received - will default to TIMEOUT if no reply received. Prevents new GET requests while waiting for previous ones.
   }
-} 
-
-static void get_all(void *data) {
-  fetch_msg(SERVER_KEY_CPU);
-  variable_offset_timer = app_timer_register(DEFAULT_UPDATE_OFFSET, get_mem_timer, NULL);
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -124,7 +121,13 @@ static void click_config_provider(void *context) {
 
 static void updateBarData(ProgressBarLayer *bar, int newVal) {
   ProgressData *data = layer_get_data(bar);
-  data->progress = newVal;
+  //percentage needs to be converted into pixels
+  snprintf(logBuff, 20, "newVal: %d", newVal);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, logBuff);
+  int bar_width = ((float)newVal/100) * PBAR_WIDTH;
+  snprintf(logBuff, 20, "bar_width: %d", bar_width);
+  APP_LOG(APP_LOG_LEVEL_DEBUG, logBuff);
+  data->progress = bar_width;
 }
 
 static void in_received_handler(DictionaryIterator *iter, void *context) {
@@ -209,7 +212,7 @@ static void progress_bar_layer_update(ProgressBarLayer *bar, GContext *ctx) {
 }
 
 static ProgressBarLayer * progress_bar_layer_create(int y_pos) {
-  ProgressBarLayer *progress_bar_layer = layer_create_with_data(GRect(6, y_pos, 130, 18), sizeof(ProgressData));
+  ProgressBarLayer *progress_bar_layer = layer_create_with_data(GRect(6, y_pos, PBAR_WIDTH, PBAR_HEIGHT), sizeof(ProgressData));
   layer_set_update_proc(progress_bar_layer, progress_bar_layer_update);
   layer_mark_dirty(progress_bar_layer);
 
