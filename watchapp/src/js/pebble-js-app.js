@@ -1,6 +1,7 @@
 var initialised = false;
 
 var ip = '';
+var port = '8080';
 var update_interval = -1;
 var auto_update = -1;
 
@@ -10,7 +11,7 @@ function fetchServerStats(ip, FIELD) {
   // build the GET request
   console.log("connecting to: " + ip);
   req.TimeOut = 2000;
-  req.open('GET', "http://" + ip + "/pebbleTest.json", true);
+  req.open('GET', "http://" + ip + ":" + port + "/pebbleTest.json", true);
   req.onload = function(e) {
     console.log('1');
     if (req.readyState == 4) {
@@ -82,6 +83,11 @@ Pebble.addEventListener("ready",
     if (!ip) {
       ip = '192.168.1.9';
     }
+    
+    port = localStorage.getItem("port");
+    if (!port) {
+      port = '8080';
+    }
 
     update_interval = localStorage.getItem("update_interval");
     console.log('JS - update_interval: ' + update_interval.toString());
@@ -107,6 +113,7 @@ Pebble.addEventListener("showConfiguration", function() {
   console.log("showing configuration");
   Pebble.openURL('http://root.robotprofessor.net/pebble_server_monitor_config.php?' +
                           "ip=" + ip + 
+                          "&port=" + port +
                           "&update_interval=" + (update_interval/1000).toString() +
                           "&auto_update=" + auto_update.toString()
                         );
@@ -120,18 +127,22 @@ Pebble.addEventListener("webviewclosed", function(e) {
   ip = options.ip
   localStorage.setItem("ip", ip);
 
+  port = options.port;
+  localStorage.setItem("port", port);
+
   update_interval = parseInt(options.update_interval)*1000;
   localStorage.setItem("update_interval", update_interval);
 
   auto_update = parseInt(options.auto_update);
   localStorage.setItem("auto_update", auto_update);
 
-  var watchConfig = {"ip": ip, "auto": auto_update.toString(), "update_int": update_interval.toString()};
+  var watchConfig = {"ip": ip, "port": port, "auto": auto_update.toString(), "update_int": update_interval.toString()};
 
   Pebble.sendAppMessage(watchConfig);
   
   console.log("Options = " + JSON.stringify(options));
   console.log("IP set to " + ip);
+  console.log("port set to " + port);
   console.log("update interval ser to " + update_interval.toString());
   console.log("auto_update set to " + auto_update.toString());
 });
@@ -148,7 +159,7 @@ Pebble.addEventListener("appmessage",
       //}
       if (e.payload.fetch) {
         console.log("message - FETCH SETTINGS");
-        Pebble.sendAppMessage({"ip": ip, "auto": auto_update.toString(), "update_int": update_interval.toString()});
+        Pebble.sendAppMessage({"ip": ip, "port": port, "auto": auto_update.toString(), "update_int": update_interval.toString()});
         //Pebble.sendAppMessage({"ip": ip});
         //Pebble.sendAppMessage({"auto": auto_update.toString()});
         //Pebble.sendAppMessage({"update_int": update_interval.toString()});

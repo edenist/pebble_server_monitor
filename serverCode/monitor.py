@@ -12,10 +12,12 @@
 import psutil
 import socket
 import json
+import sys
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
 testJSON = {"Data":{"cpu":12,"mem":100,"host":"JSONServe"}}
 jSysStats = {"Data":{"cpu":0,"mem":0,"host":"DEFAULT"}}
+defaultPort = 80
 
 class JSONHandler (BaseHTTPRequestHandler):
   def do_GET(self):
@@ -34,12 +36,21 @@ class JSONHandler (BaseHTTPRequestHandler):
         return
       return
     except IOError:
-      self.send_error(404, 'File Not Found: %s' % self.path)
+      self.send_error(404, 'Invalid extension. Only *.json supported: %s' % self.path)
 
 def main():
+  argc = len(sys.argv)
+  if (argc == 2):
+    jPort = (int)(sys.argv[1])
+  elif (argc == 1):
+    jPort = defaultPort
+  elif (argc > 2):
+    print('USAGE: monitor.py <port>')
+    exit(0)
+
   try:
-    server = HTTPServer(('', 8080), JSONHandler)
-    print 'started JSON server'
+    server = HTTPServer(('', jPort), JSONHandler)
+    print 'JSON server started on port %s' % jPort
     server.serve_forever()
   except KeyboardInterrupt:
     print '^C received, shutting down server'

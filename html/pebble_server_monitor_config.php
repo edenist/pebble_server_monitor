@@ -31,6 +31,21 @@
         </div>
 
         <div data-role="fieldcontain">
+          <label for="port">Server Port:</label>
+
+<?php
+          if (!isset($_GET['port'])) {
+            $port = '8080';
+          } else {
+            $port = $_GET['port'];
+          }
+  
+
+          echo '<textarea cols="40" rows="8" name="port" id="port">' . $port . '</textarea>';
+?>
+        </div>
+
+        <div data-role="fieldcontain">
           <label for="auto_update">Auto-Refresh:</label>
           <select name="auto_update" id="auto_update" data-role="slider">
 <?php
@@ -80,6 +95,7 @@
       function saveOptions() {
         var options = {
           'ip': $("#ip").val(),
+          'port': $("#port").val(),
           'auto_update': $("#auto_update").val(),
           'update_interval': $("#update_interval").val(),
         }

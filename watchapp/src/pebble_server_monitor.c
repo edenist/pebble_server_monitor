@@ -20,10 +20,12 @@
 typedef Layer ProgressBarLayer;
 
 static Window *window;
+static InverterLayer *iLayer;
 static TextLayer *hostname_text;
 static TextLayer *cpu_usage_text;
 static TextLayer *mem_usage_text;
 static TextLayer *ip_text;
+static TextLayer *port_text;
 static TextLayer *debug_text;
 static ProgressBarLayer *progress_bar_cpu;
 static ProgressBarLayer *progress_bar_mem;
@@ -33,6 +35,7 @@ static char host[26];
 static char cpu[10];
 static char mem[10];
 static char ip[26];
+static char port[16];
 
 static char logBuff[24];
 
@@ -50,6 +53,7 @@ enum {
   SERVER_KEY_AUTO = 0x5,
   SERVER_KEY_UPDATE_INT = 0x6,
   SERVER_KEY_ALL = 0x7,
+  SERVER_KEY_PORT = 0x8,
 };
 
 typedef struct {
@@ -132,6 +136,7 @@ static void updateBarData(ProgressBarLayer *bar, int newVal) {
 
 static void in_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *ip_tuple = dict_find(iter, SERVER_KEY_IP);
+  Tuple *port_tuple = dict_find(iter, SERVER_KEY_PORT);
   Tuple *cpu_tuple = dict_find(iter, SERVER_KEY_CPU);
   Tuple *mem_tuple = dict_find(iter, SERVER_KEY_MEM);
   Tuple *host_tuple = dict_find(iter, SERVER_KEY_HOST);
@@ -141,6 +146,10 @@ static void in_received_handler(DictionaryIterator *iter, void *context) {
   if (ip_tuple) {
     strncpy(ip, ip_tuple->value->cstring, 16);
     text_layer_set_text(ip_text, ip);
+  }
+  if (port_tuple) {
+    strncpy(port, port_tuple->value->cstring, 16);
+    text_layer_set_text(port_text, port);
   }
   if (cpu_tuple) {
     strncpy(cpu, cpu_tuple->value->cstring, 10);
@@ -226,6 +235,7 @@ static void progress_bar_destroy(ProgressBarLayer *progress_bar_layer) {
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   
+  
   //hostname text layer
   hostname_text = text_layer_create(GRect(0, 0, 144, 20));
   layer_add_child(window_layer, text_layer_get_layer(hostname_text));
@@ -250,11 +260,19 @@ static void window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(ip_text));
   text_layer_set_text(ip_text, "IP Address");
 
+  //port text layer
+  port_text = text_layer_create(GRect(0, 115, 54, 20));
+  layer_add_child(window_layer, text_layer_get_layer(port_text));
+  text_layer_set_text(port_text, "Port");
+
   //debug text layer 
   debug_text = text_layer_create(GRect(50, 120, 94, 20));
   layer_add_child(window_layer, text_layer_get_layer(debug_text));
   text_layer_set_text(debug_text, "DEBUG");
 
+  //Inverter layer
+  iLayer = inverter_layer_create(GRect(0, 0, 144, 152));
+  layer_add_child(window_layer, inverter_layer_get_layer(iLayer));
 }
 
 static void window_unload(Window *window) {
@@ -262,7 +280,9 @@ static void window_unload(Window *window) {
   text_layer_destroy(cpu_usage_text);
   text_layer_destroy(mem_usage_text);
   text_layer_destroy(ip_text);
+  text_layer_destroy(port_text);
   text_layer_destroy(debug_text);
+  inverter_layer_destroy(iLayer);
   progress_bar_destroy(progress_bar_cpu);
   progress_bar_destroy(progress_bar_mem);
 }
